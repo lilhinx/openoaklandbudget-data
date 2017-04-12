@@ -55,7 +55,7 @@ def getFrag_headers( year ):
 			ret.update( { encodeKey( val ):{ "label":val, "index":idx } } )
 		return ret
 
-def genFrag_values( year, header_item_index, key, label ):
+def genFrag_taxon( year, header_item_index, key, label ):
 	filename = "/".join( [ rawDataDir( ), ".".join( [ year, "csv" ] ) ] )
 	with open( filename, 'r' ) as datafile:
 		datareader = csv.reader( datafile, delimiter=',' )
@@ -81,9 +81,9 @@ def main( ):
 		for key, value in header.iteritems( ):
 			if value[ "label" ] == "AMT":
 				continue
-			values = genFrag_values( year, value[ "index" ], key, value[ "label" ] )
+			values = genFrag_taxon( year, value[ "index" ], key, value[ "label" ] )
 			values_filename = "{0}.json".format( key )
-			writeYearFrag( values, year, "values", values_filename )
+			writeYearFrag( values, year, "taxonomy", values_filename )
 			
 		
 	
