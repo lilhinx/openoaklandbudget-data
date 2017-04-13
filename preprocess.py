@@ -28,25 +28,25 @@ def encodeValue( value ):
 	md5hash.update( value )
 	return "v{0}".format( md5hash.hexdigest( ) )
 
-def outputDataDirYear( year, subdirs ):
-	year_dir = "/".join( [ outputDataDir( ), year, "/".join( subdirs ) ] )
-	if not os.path.exists( year_dir ):
-		os.makedirs( year_dir )
-	return year_dir
+def outputDataDirDataset( dataset, subdirs ):
+	dataset_dir = "/".join( [ outputDataDir( ), dataset, "/".join( subdirs ) ] )
+	if not os.path.exists( dataset_dir ):
+		os.makedirs( dataset_dir )
+	return dataset_dir
 
 def writeGlobalFrag( fragObj, filename ):
 	outputFilename = "/".join( [ outputDataDir( ), filename ] ) 
 	with open( outputFilename, 'w+' ) as f:
 		f.write( json.dumps( fragObj, sort_keys=True, indent=5 ) )
 		
-def yearFragFilename( year, subdirs, filename ):
-	return "/".join( [ outputDataDirYear( year, subdirs ), filename ] ) 
+def datasetFragFilename( dataset, subdirs, filename ):
+	return "/".join( [ outputDataDirDataset( dataset, subdirs ), filename ] ) 
 	
-def writeYearFrag( fragObj, year, subdirs, filename ):
-	with open( yearFragFilename( year, subdirs, filename ), 'w+' ) as f:
+def writeDatasetFrag( fragObj, dataset, subdirs, filename ):
+	with open( datasetFragFilename( dataset, subdirs, filename ), 'w+' ) as f:
 		f.write( json.dumps( fragObj, sort_keys=True, indent=5 ) )
 
-def genFrag_years( ):
+def genFrag_datasets( ):
 	rawCSVFiles = glob.glob( "/".join( [ rawDataDir( ), "*.csv" ] ) )
 	ret = [ ]
 	for csvFile in rawCSVFiles:
@@ -56,8 +56,8 @@ def genFrag_years( ):
 		ret.append( csvFile )
 	return ret
 
-def getFrag_headers( year ):
-	filename = "/".join( [ rawDataDir( ), ".".join( [ year, "csv" ] ) ] )
+def getFrag_headers( dataset ):
+	filename = "/".join( [ rawDataDir( ), ".".join( [ dataset, "csv" ] ) ] )
 	with open( filename, 'r' ) as datafile:
 		datareader = csv.reader( datafile, delimiter=',' )
 		header = datareader.next( )
@@ -66,8 +66,8 @@ def getFrag_headers( year ):
 			ret.update( { encodeKey( val ):{ "label":val, "pos":idx } } )
 		return ret
 
-def genFrag_taxonomyRoot( year, header_item_index, key, label ):
-	filename = "/".join( [ rawDataDir( ), ".".join( [ year, "csv" ] ) ] )
+def genFrag_taxonomyRoot( dataset, header_item_index, key, label ):
+	filename = "/".join( [ rawDataDir( ), ".".join( [ dataset, "csv" ] ) ] )
 	with open( filename, 'r' ) as datafile:
 		datareader = csv.reader( datafile, delimiter=',' )
 		header_row = datareader.next( )
@@ -126,16 +126,16 @@ class IndexNode( object ):
 		self.children.append( node )
 		node.parent = self
 	
-def generateChildNodes( year, key, descendentKeys, parent ):
-	keyFrag = json.load( open( yearFragFilename( year, [ "taxonomy" ], "{0}.json".format( key ) ), 'r' ) )
+def generateChildNodes( dataset, key, descendentKeys, parent ):
+	keyFrag = json.load( open( datasetFragFilename( dataset, [ "taxonomy" ], "{0}.json".format( key ) ), 'r' ) )
 	for value in keyFrag[ "values" ]:
 		node = IndexNode( keyFrag[ "key" ], value[ "value" ], value[ "key" ], keyFrag[ "pos" ] )
 		parent.addChild( node )
 		if len( descendentKeys ) > 0:
-			generateChildNodes( year, descendentKeys[ 0 ], descendentKeys[1:], node )
+			generateChildNodes( dataset, descendentKeys[ 0 ], descendentKeys[1:], node )
 	
-def processNode( year, node, amt_pos ):
-	filename = "/".join( [ rawDataDir( ), ".".join( [ year, "csv" ] ) ] )
+def processNode( dataset, node, amt_pos ):
+	filename = "/".join( [ rawDataDir( ), ".".join( [ dataset, "csv" ] ) ] )
 	amounts = [ ]
 	with open( filename, 'r' ) as datafile:
 		datareader = csv.reader( datafile, delimiter=',' )
@@ -144,34 +144,35 @@ def processNode( year, node, amt_pos ):
 			if node.evaluate( row ):
 				amounts.append( float( row[ amt_pos ] ) )
 	subdirs = [ "index", node.path( ) ]
-	writeYearFrag( { "sum":sum( amounts ) }, year, subdirs, "summary.json" )
+	writeDatasetFrag( { "sum":sum( amounts ) }, dataset, subdirs, "summary.json" )
 	for childNode in node.children:
-		processNode( year, childNode, amt_pos )
+		processNode( dataset, childNode, amt_pos )
+		
 
 def main( ):
 	parser = argparse.ArgumentParser( description='A utiltiy to preprocess budget CSV data into JSON fragments' )
 	args = parser.parse_args( )
 	shutil.rmtree( outputDataDir( ) )
 	config = json.load( open( "config.json", 'r' ) )
-	years = genFrag_years( )
-	writeGlobalFrag( years, "years.json" )
-	for year in years:
-		header = getFrag_headers( year )
-		writeYearFrag( header, year, "", "header.json" )
+	datasets = genFrag_datasets( )
+	writeGlobalFrag( datasets, "datasets.json" )
+	for dataset in datasets:
+		header = getFrag_headers( dataset )
+		writeDatasetFrag( header, dataset, "", "header.json" )
 		amt_pos = -1
 		for key, value in header.iteritems( ):
 			if value[ "label" ] == AMOUNT_KEY:
 				amt_pos = value[ "pos" ]
 				continue
-			root = genFrag_taxonomyRoot( year, value[ "pos" ], key, value[ "label" ] )
+			root = genFrag_taxonomyRoot( dataset, value[ "pos" ], key, value[ "label" ] )
 			root_filename = "{0}.json".format( key )
-			writeYearFrag( root, year, [ "taxonomy" ], root_filename )
+			writeDatasetFrag( root, dataset, [ "taxonomy" ], root_filename )
 		if amt_pos < 0:
 			return
 		root = IndexNode.root( )
 		for keys in config[ "indices" ]:
-			generateChildNodes( year, keys[ 0 ], keys[1:], root )
-		processNode( year, root, amt_pos )
+			generateChildNodes( dataset, keys[ 0 ], keys[1:], root )
+		processNode( dataset, root, amt_pos )
 	
 
 if __name__ == "__main__":
