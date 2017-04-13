@@ -70,12 +70,9 @@ def genFrag_taxonomyRoot( year, header_item_index, key, label ):
 	filename = "/".join( [ rawDataDir( ), ".".join( [ year, "csv" ] ) ] )
 	with open( filename, 'r' ) as datafile:
 		datareader = csv.reader( datafile, delimiter=',' )
-		is_header = True
+		header_row = datareader.next( )
 		values = set( )
 		for row in datareader:
-			if is_header:
-				is_header = False
-				continue
 			values.add( row[ header_item_index ] )
 		values_list = list( values )
 		values = [ ]
@@ -85,12 +82,6 @@ def genFrag_taxonomyRoot( year, header_item_index, key, label ):
 
 def subtract_taxon( keys, taxonomy ):
 	return { k:v for k, v in taxonomy.items( ) if k not in keys and v[ "label" ] != AMOUNT_KEY }
-
-def process_index_numeric_summary( year, locus, predicate ):
-	subdirs = [ "index" ]
-	subdirs.extend( locus[:] )
-	subdirs.append( values[:0].get( "key" ) )
-	writeYearFrag( {"foo":"bar" }, year, subdirs, "summary.json" )
 
 
 class IndexNode( object ):
@@ -106,7 +97,16 @@ class IndexNode( object ):
 	@classmethod
 	def root( cls ):
 		return IndexNode( "", "", "", 0, True )
-		
+	
+	def evaluate( self, row ):
+		if self.parent is not None:
+			if not self.parent.evaluate( row ):
+				return False
+		if self.isRoot:
+			return True
+		return row[ self.pos ] == self.value
+	
+	
 	def path( self ):
 		if self.isRoot:
 			return "/"
@@ -126,42 +126,52 @@ class IndexNode( object ):
 		self.children.append( node )
 		node.parent = self
 	
-def explodePredicateKeys( year, key, descendentKeys, parent ):
+def generateChildNodes( year, key, descendentKeys, parent ):
 	keyFrag = json.load( open( yearFragFilename( year, [ "taxonomy" ], "{0}.json".format( key ) ), 'r' ) )
 	for value in keyFrag[ "values" ]:
 		node = IndexNode( keyFrag[ "key" ], value[ "value" ], value[ "key" ], keyFrag[ "pos" ] )
 		parent.addChild( node )
 		if len( descendentKeys ) > 0:
-			explodePredicateKeys( year, descendentKeys[ 0 ], descendentKeys[1:], node )
-
-def genPredicateTree( year, keys ):
-	root = IndexNode.root( )
-	explodePredicateKeys( year, keys[ 0 ], keys[1:], root )
-	root.printGraph( )
+			generateChildNodes( year, descendentKeys[ 0 ], descendentKeys[1:], node )
+	
+def processNode( year, node, amt_pos ):
+	filename = "/".join( [ rawDataDir( ), ".".join( [ year, "csv" ] ) ] )
+	amounts = [ ]
+	with open( filename, 'r' ) as datafile:
+		datareader = csv.reader( datafile, delimiter=',' )
+		header_row = datareader.next( )
+		for row in datareader:
+			if node.evaluate( row ):
+				amounts.append( float( row[ amt_pos ] ) )
+	subdirs = [ "index", node.path( ) ]
+	writeYearFrag( { "sum":sum( amounts ) }, year, subdirs, "summary.json" )
+	for childNode in node.children:
+		processNode( year, childNode, amt_pos )
 
 def main( ):
 	parser = argparse.ArgumentParser( description='A utiltiy to preprocess budget CSV data into JSON fragments' )
 	args = parser.parse_args( )
-	
 	shutil.rmtree( outputDataDir( ) )
-	
 	config = json.load( open( "config.json", 'r' ) )
-	
-	
 	years = genFrag_years( )
 	writeGlobalFrag( years, "years.json" )
 	for year in years:
 		header = getFrag_headers( year )
 		writeYearFrag( header, year, "", "header.json" )
+		amt_pos = -1
 		for key, value in header.iteritems( ):
 			if value[ "label" ] == AMOUNT_KEY:
+				amt_pos = value[ "pos" ]
 				continue
 			root = genFrag_taxonomyRoot( year, value[ "pos" ], key, value[ "label" ] )
 			root_filename = "{0}.json".format( key )
 			writeYearFrag( root, year, [ "taxonomy" ], root_filename )
-				
-		for indexConfig in config[ "indices" ]:
-			predicateTree = genPredicateTree( year, indexConfig )
+		if amt_pos < 0:
+			return
+		root = IndexNode.root( )
+		for keys in config[ "indices" ]:
+			generateChildNodes( year, keys[ 0 ], keys[1:], root )
+		processNode( year, root, amt_pos )
 	
 
 if __name__ == "__main__":
