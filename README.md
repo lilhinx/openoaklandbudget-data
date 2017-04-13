@@ -7,7 +7,7 @@ The purpose of this utility is to create a static index of raw financial tabular
 Instead the data is pre-queried according to an index definition and the results are stored in flat files (JSON) using a simple tree structure. These flat files can be included in a variety of projects, but are primarily intended to be uploaded to a content delivery network, so they may be efficiently deliveries on-demand to a web or native mobile application.
 
 # Workflow
-The process is to
+The process is to:
 1. Aquire raw file and place in data directory
 2. Run process.py
 3. Review the generated files, specifically header.json and the files in the taxonomy directory.
