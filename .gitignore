@@ -88,4 +88,4 @@ ENV/
 # Rope project settings
 .ropeproject
 
-data/preprocess
+data/process

@@ -13,7 +13,7 @@ def rawDataDir( ):
 	return "./data/raw"
 	
 def outputDataDir( ):
-	ret = "./data/preprocess"
+	ret = "./data/process"
 	if not os.path.exists( ret ):
 		os.mkdir( ret )
 	return ret
