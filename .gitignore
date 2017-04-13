@@ -89,3 +89,6 @@ ENV/
 .ropeproject
 
 data/process
+
+.DS_Store
+data/.DS_Store
