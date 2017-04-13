@@ -147,28 +147,43 @@ def processNode( dataset, node, amt_pos ):
 	writeDatasetFrag( { "sum":sum( amounts ) }, dataset, subdirs, "summary.json" )
 	for childNode in node.children:
 		processNode( dataset, childNode, amt_pos )
-		
+
+def scanDatasets( ):
+	datasets = genFrag_datasets( )
+	writeGlobalFrag( datasets, "datasets.json" )
+	return datasets
+	
+def analyzeDataset( dataset ):
+	header = getFrag_headers( dataset )
+	writeDatasetFrag( header, dataset, "", "header.json" )
+	amt_pos = -1
+	for key, value in header.iteritems( ):
+		if value[ "label" ] == AMOUNT_KEY:
+			amt_pos = value[ "pos" ]
+			continue
+		root = genFrag_taxonomyRoot( dataset, value[ "pos" ], key, value[ "label" ] )
+		root_filename = "{0}.json".format( key )
+		writeDatasetFrag( root, dataset, [ "taxonomy" ], root_filename )
+	return amt_pos
+	
+def loadDatasetConfig( dataset ):
+	filename = "/".join( [ rawDataDir( ), ".".join( [ dataset, "config", "json" ] ) ] )
+	if not os.path.exists( filename ):
+		return None
+	return json.load( open( filename, 'r' ) )
 
 def main( ):
 	parser = argparse.ArgumentParser( description='A utiltiy to preprocess budget CSV data into JSON fragments' )
 	args = parser.parse_args( )
 	shutil.rmtree( outputDataDir( ) )
-	config = json.load( open( "config.json", 'r' ) )
-	datasets = genFrag_datasets( )
-	writeGlobalFrag( datasets, "datasets.json" )
+	datasets = scanDatasets( )
 	for dataset in datasets:
-		header = getFrag_headers( dataset )
-		writeDatasetFrag( header, dataset, "", "header.json" )
-		amt_pos = -1
-		for key, value in header.iteritems( ):
-			if value[ "label" ] == AMOUNT_KEY:
-				amt_pos = value[ "pos" ]
-				continue
-			root = genFrag_taxonomyRoot( dataset, value[ "pos" ], key, value[ "label" ] )
-			root_filename = "{0}.json".format( key )
-			writeDatasetFrag( root, dataset, [ "taxonomy" ], root_filename )
-		if amt_pos < 0:
-			return
+		amt_pos = analyzeDataset( dataset )
+		if amt_pos is None:
+			continue
+		config = loadDatasetConfig( dataset )
+		if config is None:
+			continue
 		root = IndexNode.root( )
 		for keys in config[ "indices" ]:
 			generateChildNodes( dataset, keys[ 0 ], keys[1:], root )
