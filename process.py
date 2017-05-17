@@ -7,7 +7,6 @@ import hashlib
 import shutil
 import time
 
-AMOUNT_KEY = "AMT"
 
 def rawDataDir( ):
 	return "./data/raw"
@@ -156,12 +155,15 @@ def scanDatasets( ):
 	writeGlobalFrag( datasets, "datasets.json" )
 	return datasets
 	
-def analyzeDataset( dataset ):
+def scanDataset( dataset ):
 	header = getFrag_headers( dataset[ 'name' ] )
 	writeDatasetFrag( header, dataset[ 'name' ], "", "header.json" )
+	return header
+	
+def analyzeDataset( dataset, header ):
 	amt_pos = -1
 	for key, value in header.iteritems( ):
-		if value[ "label" ] == AMOUNT_KEY:
+		if key == dataset[ 'config' ][ 'AMT' ]:
 			amt_pos = value[ "pos" ]
 			continue
 		root = genFrag_taxonomyRoot( dataset[ 'name' ], value[ "pos" ], key, value[ "label" ] )
@@ -173,7 +175,10 @@ def loadDatasetConfig( dataset ):
 	filename = "/".join( [ rawDataDir( ), ".".join( [ dataset, "config", "json" ] ) ] )
 	if not os.path.exists( filename ):
 		return None
-	return json.load( open( filename, 'r' ) )
+	config = json.load( open( filename, 'r' ) )
+	if config.get( 'AMT', None ) == None:
+		return None
+	return config
 
 def main( ):
 	parser = argparse.ArgumentParser( description='A utility to preprocess budget CSV data into JSON fragments' )
@@ -186,17 +191,27 @@ def main( ):
 		quit( )
 	
 	for dataset in datasets:
-		amt_pos = analyzeDataset( dataset )
+		header = scanDataset( dataset )
+		
+		if dataset[ 'config' ] is None:
+			print dataset[ 'name' ], " has no valid config"
+			continue
+			
+		amt_pos = analyzeDataset( dataset, header )
+		
+		
 		if args.analyze:
 			continue
-		if amt_pos is None:
+		if amt_pos is None or amt_pos < 0:
+			print dataset[ 'name' ], " has no amount!"
 			continue
-		if dataset.config is None:
-			continue
+		
 		root = IndexNode.root( )
-		for keys in dataset.config[ "indices" ]:
-			generateChildNodes( dataset, keys[ 0 ], keys[1:], root )
-		processNode( dataset, root, amt_pos )
+		for keys in dataset[ 'config'][ "indices" ]:
+			if len( keys ) == 0:
+				continue
+			generateChildNodes( dataset[ 'name' ], keys[ 0 ], keys[1:], root )
+		processNode( dataset[ 'name' ], root, amt_pos )
 	
 
 if __name__ == "__main__":
