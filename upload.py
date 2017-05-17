@@ -6,7 +6,7 @@ def outputDataDir( ):
 	return "./data/process"
 
 def main( ):
-	parser = argparse.ArgumentParser( description='A utiltiy to upload a raw static index of preprocessed financial data' )
+	parser = argparse.ArgumentParser( description='A utility to upload a raw static index of preprocessed financial data' )
 	parser.add_argument( "-b", "--bucket", required=False, default='openoaklandbudget-data' )
 	args = parser.parse_args( )
 	client = boto3.client( 's3' )

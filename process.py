@@ -53,7 +53,10 @@ def genFrag_datasets( ):
 		csvFile = csvFile.replace( rawDataDir( ), "" )
 		csvFile = csvFile.replace( "/", "" )
 		csvFile = csvFile.replace( ".csv", "" )
-		ret.append( csvFile )
+		dataSetDef = { "name":csvFile }
+		dataSetDef[ "config" ] = loadDatasetConfig( csvFile )
+		ret.append( dataSetDef )
+	
 	return ret
 
 def getFrag_headers( dataset ):
@@ -77,8 +80,8 @@ def genFrag_taxonomyRoot( dataset, header_item_index, key, label ):
 		values_list = list( values )
 		values = [ ]
 		for value in values_list:
-			values.append( { "key":encodeValue( value ), "value":value } )
-		return { "key":key, "label":label, "pos":header_item_index, "values":values }
+			values.append( { "key":encodeValue( value ), "value":value.decode( 'utf-8', 'ignore' ).encode( "utf-8" ).strip( ) } )
+		return { "key":key, "label":label.encode( 'utf-8' ).strip( ), "pos":header_item_index, "values":values }
 
 def subtract_taxon( keys, taxonomy ):
 	return { k:v for k, v in taxonomy.items( ) if k not in keys and v[ "label" ] != AMOUNT_KEY }
@@ -154,16 +157,16 @@ def scanDatasets( ):
 	return datasets
 	
 def analyzeDataset( dataset ):
-	header = getFrag_headers( dataset )
-	writeDatasetFrag( header, dataset, "", "header.json" )
+	header = getFrag_headers( dataset[ 'name' ] )
+	writeDatasetFrag( header, dataset[ 'name' ], "", "header.json" )
 	amt_pos = -1
 	for key, value in header.iteritems( ):
 		if value[ "label" ] == AMOUNT_KEY:
 			amt_pos = value[ "pos" ]
 			continue
-		root = genFrag_taxonomyRoot( dataset, value[ "pos" ], key, value[ "label" ] )
+		root = genFrag_taxonomyRoot( dataset[ 'name' ], value[ "pos" ], key, value[ "label" ] )
 		root_filename = "{0}.json".format( key )
-		writeDatasetFrag( root, dataset, [ "taxonomy" ], root_filename )
+		writeDatasetFrag( root, dataset[ 'name' ], [ "taxonomy" ], root_filename )
 	return amt_pos
 	
 def loadDatasetConfig( dataset ):
@@ -173,19 +176,25 @@ def loadDatasetConfig( dataset ):
 	return json.load( open( filename, 'r' ) )
 
 def main( ):
-	parser = argparse.ArgumentParser( description='A utiltiy to preprocess budget CSV data into JSON fragments' )
+	parser = argparse.ArgumentParser( description='A utility to preprocess budget CSV data into JSON fragments' )
+	parser.add_argument( '--scan', action='store_true', help='only scan datasets' )
+	parser.add_argument( '--analyze', action='store_true', help='only scan and analyze datasets' )
 	args = parser.parse_args( )
 	shutil.rmtree( outputDataDir( ) )
 	datasets = scanDatasets( )
+	if args.scan:
+		quit( )
+	
 	for dataset in datasets:
 		amt_pos = analyzeDataset( dataset )
+		if args.analyze:
+			continue
 		if amt_pos is None:
 			continue
-		config = loadDatasetConfig( dataset )
-		if config is None:
+		if dataset.config is None:
 			continue
 		root = IndexNode.root( )
-		for keys in config[ "indices" ]:
+		for keys in dataset.config[ "indices" ]:
 			generateChildNodes( dataset, keys[ 0 ], keys[1:], root )
 		processNode( dataset, root, amt_pos )
 	
